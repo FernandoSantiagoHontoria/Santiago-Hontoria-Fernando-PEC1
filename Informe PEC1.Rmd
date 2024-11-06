@@ -1,0 +1,278 @@
+---
+title: "Informe PEC1"
+author: "Fernando Santiago Hontoria"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    toc: true
+    toc_depth: '3'
+---
+
+```{r setup, include=FALSE, echo = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introducción
+
+La PEC 1 de la asignatura de Análisis de Datos Ómicos pretende que se planifique y ejecute una versión simplificada del proceso de análisis de datos ómicos. Estos datos se han podido escoger de entre una gran variedad, empleándose finalmente un dataset que contiene mediciones de distintos metabolitos en pacientes con caquexia e indiivudos control.
+
+La caquexia es un síndrome complejo caracterizado por una pérdida extrema de peso corporal, masa muscular y tejido adiposo, asociado comúnmente con enfermedades crónicas graves, como el cáncer, la insuficiencia cardíaca, la enfermedad pulmonar obstructiva crónica (EPOC) y la insuficiencia renal. A diferencia de la pérdida de peso común, la caquexia implica una desnutrición profunda y se relaciona con alteraciones metabólicas, inflamación y un desequilibrio energético que el cuerpo no puede compensar, lo que lleva a una pérdida de masa muscular y grasa, teniendo un gran impacto en la calidad de vida y supervivencia de los individuos afectados.
+
+El estudio de metabolitos en pacientes con caquexia y en grupos de control es esencial porque los metabolitos reflejan cambios bioquímicos en tiempo real que ocurren debido a esta condición. Al analizar el perfil metabólico, se pueden identificar alteraciones específicas, proporcionando una visión profunda sobre cómo la caquexia afecta el metabolismo celular y sistémico. Los metabolitos específicos pueden servir como biomarcadores de diagnóstico para identificar pacientes en etapas tempranas de caquexia o para predecir la progresión de la enfermedad, lo que finalmente puede contribuir a mejorar la calidad de vida y aumentar la supervivencia de los pacientes.
+
+# Objetivos
+
+Sabiendo la relevancia y motivación biológica detrás de este estudio, se tiene por objetivo de este trabajo explorar el archivo de datos sobre los metabolitos con pacientes con y sin caquexia, y comprobar si existen diferencias o si se pueden obtener conclusiones del mismo. Siguiendo esta línea, se pueden plantear las siguientes cuestiones:
+
+1. ¿Son los datos recogidos comprensibles, y se tiene suficiente información para obtener conclsuiones?
+
+2. ¿Existen diferencias significativas entre los grupos del ensayo?
+
+3. ¿Podrían obtenerse marcadores predictivos a partir de las conclusiones del estudio de los datos?
+
+# Materiales y métodos
+
+## Materiales
+
+Los datos para este trabajo se han encontrado a través del repositorio "metaboData" de Álex Sanchez Pla (https://github.com/nutrimetabolomics/metaboData/). Dentro de la sección de Datasets se encuentra una carpeta que contiene el archivo csv y la información del mismo, donde se encuentra el link de descarga y el registro de un sanity check sobre el archivo.
+
+Este dataset de cachexia (caquexia en inglés) contiene dos grupos entre sus muestras, los pacientes y los contros, sus datos no están pareados y no se detectaron datos que falten. Se han tomado datos de 63 metabolitos distintos, además de incluirse el ID de cada paciente empleado en el ensayo.
+
+## Procedimiento
+
+### Descarga de datos
+
+La descarga de datos se realizó directamente a partir del link de descarga del archivo (https://rest.xialab.ca/api/download/metaboanalyst/human_cachexia.csv). A partir de este, se señaol que era un archivo .csv y se guardó como dataframe directamente en una variable denominada "datos".
+
+```{r 1, echo =FALSE, include=FALSE}
+
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+if (!requireNamespace("SummarizedExperiment", quietly = TRUE)) #se descarga los paquetes si es necesario
+    BiocManager::install("SummarizedExperiment")
+
+datos = read.csv("https://rest.xialab.ca/api/download/metaboanalyst/human_cachexia.csv") #se prepara archivo de datos
+```
+
+### Creación del contenedor
+
+En primer lugar deben analizarse los datos de los que se parten, modificar las categorias necesarias para homogeneizar el formato y entender cómo está contruido el dataset. Luego, se extraen las filas y columnas que contengan los nombres clave, en este caso los ids de los pacientes y los tipos de metabolito, que se asignarán a los nombres de las filas y las columnas respectivamente. Los datos numéricos que contienen las medidas de distintos metabolitos en los pacientes, además de la columna de los grupos, se agrupan en una matriz, formato que permitirá crear el contenedor.
+
+Una vez que los datos están preparados, se integran en un contenedor único, el **SummarizedExperiment**, que estructura toda la información de forma compacta y organizada. Este contenedor incluye:
+
+- Las mediciones de los metabolitos (la matriz de datos)
+- Los identificadores de los pacientes como metadatos de filas
+- Los nombres de los metabolitos como metadatos de columnas
+
+Para proporcionar un contexto completo sobre el dataset, se añaden detalles adicionales como una descripción general del estudio, la fuente de los datos, la fecha de creación, el autor, y notas específicas sobre las filas y columnas del objeto. Estos metadatos ayudan a comprender el contenido del dataset, su estructura y su uso potencial.
+
+```{r 2.1, echo = FALSE, include = FALSE}
+
+#summary(datos) #se observa la naturaleza de los datos
+datos$Muscle.loss = as.factor(datos$Muscle.loss) #se pasa los grupos a factor
+#summary(datos) #se comprueba
+
+
+id_pacientes = datos[, 1] #se guardan los ids
+datos_filas = data.frame(ID_Paciente = id_pacientes)  #se crea un data frame de los ids
+rownames(datos_filas) = id_pacientes  #se hace que las filas tengan nombre
+
+
+datos_expresion_metabolitos = as.matrix(datos[, -1]) #se guardan los datos numéricos
+
+
+metabolitos = data.frame(Tipos_metabolitos = colnames(datos_expresion_metabolitos))  #se crea un data frame de los distintos metabolitos estudiados
+rownames(metabolitos) = colnames(datos_expresion_metabolitos)  ##se hace que las filas tengan nombre
+
+
+library(SummarizedExperiment)
+SExperiment = SummarizedExperiment( #se crea el SummarizedExperiment
+  assays = list(counts = datos_expresion_metabolitos),
+  rowData = datos_filas,
+  colData = metabolitos
+)
+SummarizedExperiment::metadata(SExperiment) = list( #se añaden los metadatos
+  descripcion = "Dataset con valores de metabolitos en pacientes control y con caquexia humana",
+  fuente = "MetaboAnalyst",
+  fecha = Sys.Date(),
+  autor = "Xia Lab",
+  filas = "Las filas representan los IDs de los individuos del estudio",
+  columnas = "Las columnas representan los metabolitos medidos en los individuos",
+  notas = "Los datos se dividen en dos subgrupos, los control y los que padecen caquexia. Los datos no están apareados. No se detectaron datos que falten. Dataset obtenido de https://rest.xialab.ca/api/download/metaboanalyst/human_cachexia.csv"
+)
+
+metadata(SExperiment)$Tipos_metabolitos = list (
+  descripcion = "Representa los metabolitos medidos en los individuos",
+  notas = "No se describen datos adicionales de procesamiento de muestras para la obtención de los datos"
+)
+```
+
+```{r 2.2, echo = FALSE}
+SExperiment #se ejecuta 
+```
+
+### Exploración de datos
+
+La exploración de datos del dataset escogido se ha dividido en tres apartados. Primero, la creación de un histograma, que ha permitido una comparativa visual de las diferencias en los metabolitos en cada grupo. También para el análisis estadístico-visual, se ha realizado un análisis de componentes principales, para que se vea cómo se agrupan los datos en los dos grupos. Ya por último, se ha realziado un análisis estadístico para determinar si existen diferencias significativas en los niveles de los metabolitos entre el grupo control y el grupo de pacientes, lo que daría una idea de que metabolitos varían más, y su medición pueda emplearse en futuras pruebas.
+
+
+### Creación de Histograma
+
+
+Para la creación del histograma, primero se realizaron las medias del grupo de las muestras control (30 muestras) y del de las muestras de pacientes con caquexia (47 muestras). Así, se obtiene un único valor para cada metabolito en cada grupo, lo que permite una comparación visual. Esta comparación se realzia mediante histograma, que permite un solapamiento de las columnas que ayuda a distinguir posibles diferencias.
+```{r 3.1.1, echo = FALSE, include = FALSE}
+
+#se descargan los recursos que se emplearán en los siguientes apartados
+if (!requireNamespace("ggplot2", quietly = TRUE))
+    install.packages("ggplot2")
+
+#HISTOGRAMA
+
+library(ggplot2)
+subset_control = subset(datos, Muscle.loss == "control") #se hace un subset con los valores del grupo control
+medias_control = colMeans(subset_control[, sapply(subset_control, is.numeric)], na.rm = TRUE) #se hacen las medias de cada metabolito
+medias_control_list = unname(medias_control) #se obtiene una lista con los valores numéricos solo
+subset_cachexic = subset(datos, Muscle.loss == "cachexic") #idem con cachexic
+medias_cachexic = colMeans(subset_cachexic[, sapply(subset_cachexic, is.numeric)], na.rm = TRUE)
+medias_cachexic_list = unname(medias_cachexic)
+
+
+medias_df = data.frame( #se convierte en un dataframe comparativo, donde se incluyo el metabolito, el valor que tiene, y el grupo al que corresponde
+  Metabolito = rep(names(medias_control), 2),
+  Valor_medio = c(medias_control, medias_cachexic),
+  Group = rep(c("control", "cachexia"), each = length(medias_control))
+)
+```
+
+```{r 3.1.2, echo = FALSE, warning = FALSE}
+#Se realiza histograma comparando ambos
+ggplot(medias_df, aes(x = Metabolito, y = Valor_medio, fill = Group)) +
+  geom_histogram(stat = "identity", position = "dodge", alpha = 0.5) +
+  labs(title = "Histograma de Meyabolitos según Grupo", x = "Metabolito", y = "Valor medio") +
+  scale_fill_manual(name = "Group", values = c("control" = "blue", "cachexia" = "red")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+
+### Análisis de componentes principales
+
+
+El **análisis de componentes principales (ACP)** es una técnica estadística que permite visualizar y explorar patrones en los datos, lo que facilita la interpretación de datos complejos. Para realziar el análisis, se seleccionan los datos numéricos de los metabolitos y se normalizan, lo que permite que cada variable tenga la misma importancia en el análisis, eliminando el efecto de diferentes escalas o unidades entre variables. Entonces, se calculan los componentes principales, que representan las direcciones en las que los datos tienen mayor variabilidad. Los resultados del ACP se almacenan en un nuevo conjunto de datos, donde cada fila corresponde a una muestra y cada columna a un componente principal. Estos resultados se exponene mediante un gráfico bidemensional, siendo los ejes las dos muestras que más variabilidad presentan. Si los grupos de estudio (control y caquexia) se separan claramente en el gráfico, esto sugiere que hay diferencias significativas en los perfiles metabólicos entre ellos, lo cual puede indicar biomarcadores o cambios metabólicos específicos asociados con la caquexia.
+
+```{r 3.3, echo = FALSE}
+#ANÁLISIS DE COMPONENTES PRINCIPALES
+
+library(ggplot2)
+datos_expr = datos[,-1]
+
+datos_expr_escala = scale(datos_expr[,-1]) #se normalizan los datos para que esten en posiciones relativas para el gráfico 
+pca_result = prcomp(datos_expr_escala, center = TRUE, scale. = TRUE) #se hace el análisis
+
+
+pca_data = as.data.frame(pca_result$x) #se crea un dataframe con los resultados, definiendo los dos grupos
+pca_data$Group = datos_expr$Muscle.loss
+
+
+ggplot(pca_data, aes(x = PC1, y = PC2, color = Group)) + #se hace el gráfico del análisis de componente sprincipales
+  geom_point(size = 3) +
+  labs(title = "PCA de Metabolitos en Control y Caquexia",
+       x = "PC1", y = "PC2") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+
+### Estudio de diferencias significativas
+
+
+Finalmente, tras los análisis visuales, se realiza un análisis estadísitco **t de student** que compara las medias del metabolito entre ambos grupos. La prueba devuelve un valor p que indica si hay diferencias significativas en ese metabolito entre los grupos. Dado que se realizan múltiples pruebas (una para cada metabolito), se ajustan los valores p obtenidos para reducir el riesgo de detectar diferencias significativas por azar (error de Tipo I). Después del ajuste, se seleccionan solo los metabolitos cuyo valor p ajustado es menor a un umbral (usualmente 0.05), indicando diferencias estadísticamente significativas entre los grupos.
+
+```{r 3.2, echo = FALSE}
+#ANÁLISIS DE DATOS DE DIFERENCIAS SIGNIFICATIVAS (asumiendo normalidad de datos)
+datos_expr = datos[,-1] #se obtiene un dataframe sin los códigos de los pacientes
+grupos = datos_expr$Muscle.loss #se definen los grupos 
+resultados = data.frame( #se define el dataframe donde estarán los resultados, conteniendo el metabolito donde hay diferencias, su pvalue y este una vez ajustado
+  Metabolite = colnames(datos_expr),
+  p_value = NA,
+  p_ajustado = NA 
+)
+
+for (i in 2:ncol(datos_expr)) { #para todo menos la columna de los grupos
+  metabolite_values = datos_expr[, i] #para cada metabolito
+  test = t.test(metabolite_values ~ grupos) #realizar t-test
+  resultados$p_value[i] = test$p.value #se almacena el pvalue
+}
+
+resultados$p_ajustado = p.adjust(resultados$p_value, method = "fdr") #se ajustan las p por fdr
+
+significant_metabolites = resultados[resultados$p_ajustado < 0.05, ] #se escogen los valores significativos
+significant_metabolites = na.omit(significant_metabolites) #se eliminan los que tengan NA
+resultado_final = significant_metabolites$Metabolite #se guarda la lista de metabolitos donde hay diferencias significativas entre grupos
+numero_metabolitos_difsig = length(resultado_final) #se cuentan cuantos distintos son
+
+```
+
+Así, se obtienen `r numero_metabolitos_difsig` metabolitos que presentan diferencias significativas entre los grupos caquexia y control. Estos metabolitos son `r resultado_final`.
+
+### Reposición de datos en Github
+
+Todos los estudios realizados sobre los datos y los resultados obtenidos se suben a un repositorio en Github. Este repositorio, denominado Santiago-Hontoria-Fernando-PEC1, se ha creado específicamente en la web de Github para este fin. Tras crearse, se suben todos los archivos requeridos, además de un archivo README.md donde se explican los contenidos del repositorio. Así, se puede hacer público los avances realizados y añadirse un contexto a todo el proceso para terceras personas que se encuentren con el repositorio.
+
+```{r 4, echo = FALSE}
+#CREACIÓN DE ARCHIVOS A ADJUNTAR
+
+#Creación del objeto contenedor con los datos y los metadatos en formato binario (.Rda),
+save(SExperiment, file = "Caquexia_SExperiment.Rda")
+
+#Creación de los metadatos acerca del dataset en un archivo markdown.
+
+metadatos_dataset_creacion = "
+# Metadatos del Dataset: Human Cachexia
+Este dataset contiene datos sobre metabolitos en pacientes con y sin caquexia.
+
+## Descripción del Dataset
+- **Fuente**: Xia Lab, MetaboAnalyst
+- **Formato**: CSV
+- **Número de muestras**: 77 (30 controles y 47 caquexia)
+- **Número de metabolitos**: 63
+
+## Estructura del Dataset
+- **Columnas**: Muestran los valores de cada metabolito en los distintos pacientes
+- **Filas**: Muestran los valores para cada individuo de todos los metabolitos medidos
+
+## Notas Adicionales
+- No se conoce los métodos de medición del experimento y sus condiciones. Este dataset se ha obtenido de https://rest.xialab.ca/api/download/metaboanalyst/human_cachexia.csv
+"
+
+writeLines(metadatos_dataset_creacion, "metadatos_dataset.md")
+
+```
+
+# Resultados
+
+Al haberse obtenido `r numero_metabolitos_difsig` metabolitos con diferencias significativas entre grupos, debería realizarse futuros experimentos centrándose en estos metabolitos. Esto supondría un avance en el conocimiento sobre la caquexia, y acercarse a la obtención de biomarcadores que faciliten el diagnóstico y la pronosis de los pacientes.
+
+# Enlace al repositorio Github
+
+A través del siguiente enlace, se puede visitar el repositorio donde se tienen todos los archivos empleados para el análisis y aquellos obtenidos a partir del mismo. En dicho repositorio se puede encontrar:
+
+- el informe, bajo el nombre de "Informe PEC1.pdf"
+
+- el objeto contenedor con los datos y los metadatos en formato binario (.Rda), bajo el nombre de "Caquexia_SExperiment.Rda"
+
+- el código R para la exploración de los datos, bajo el nombre de "Exploración de datos PEC1.R"
+
+- los datos en formato texto, bajo el nombre de "human_cachexia.csv"
+
+- los metadatos acerca del dataset en un archivo markdown, bajo el nombre de "metadatos_dataset.md"
+
+- el archivo R markdown empleado para la creación del informe y con el código empleado, bajo el nombre de "Informe PEC1.Rmd"
+
+
+**https://github.com/FernandoSantiagoHontoria/Santiago-Hontoria-Fernando-PEC1/tree/2b27194acfd1190740b92220b9a6159411586b54 **
+
+
