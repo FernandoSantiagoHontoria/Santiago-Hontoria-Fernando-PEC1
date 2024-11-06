@@ -273,6 +273,6 @@ A través del siguiente enlace, se puede visitar el repositorio donde se tienen 
 - el archivo R markdown empleado para la creación del informe y con el código empleado, bajo el nombre de "Informe PEC1.Rmd"
 
 
-**https://github.com/FernandoSantiagoHontoria/Santiago-Hontoria-Fernando-PEC1/tree/2b27194acfd1190740b92220b9a6159411586b54 **
+**https://github.com/FernandoSantiagoHontoria/Santiago-Hontoria-Fernando-PEC1/tree/main **
 
 
